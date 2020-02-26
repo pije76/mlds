@@ -43,7 +43,7 @@ INSTALLED_APPS = [
 
 	'flatblocks',
 	'acefs',
-    'django_filters',
+
 	'debug_toolbar',
 ]
 

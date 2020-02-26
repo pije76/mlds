@@ -5,32 +5,27 @@ from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
-from django.views.generic.base import TemplateView
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import *
-from .acefs import *
-
+import base64
 import datetime
 import hashlib
-import base64
-import time
 import random
+import time
 
-import os
-
+from .acefs import *
+from .models import *
 
 def _hash_helper(input):
-	password_salt = os.urandom(32).hex()
 	h = hashlib.sha256()
-	h.update(('%s%s' % (password_salt, input)).encode('utf-8'))
-	h.update(('%s%s' % (password_salt, settings.SECRET)).encode('utf-8'))
+	h.update(input)
+	h.update(settings.SECRET)
 	return h.hexdigest()
 
 
 def _get_or_create_visitor(request):
 
-	if request.GET.get('skip_log', True):
+	if request.GET.get('skip_log', False):
 		return None
 
 	user_agent = request.META['HTTP_USER_AGENT']
@@ -80,12 +75,12 @@ def backdoor(request):
 def main(request):
 
 	visitor = _get_or_create_visitor(request)
-
+	
 	colleges = College.objects.all().order_by('school')
 	occupations = DOLSalary.objects.all().order_by('occupation')
-	draft_cells = [DraftCell(idx+1) for idx in range (0,26)]
-	positions = [Position(x) for x in range(len(POSITION_CHOICES))]
-	statuses = [Status(x) for x in range(len(STATUS_CHOICES))]
+	draft_cells = DRAFT_CELLS
+	positions = POSITIONS
+	statuses = STATUSES
 
 	if request.method == 'POST':
 
@@ -121,26 +116,28 @@ def main(request):
 			response.set_cookie('salt', salt, 365*24*60*60)
 			response.set_cookie('hash', hash, 365*24*60*60)
 			return response
-
+	
 	context = {
 		'colleges': colleges,
 		'occupations': occupations,
 		'draft_cells': draft_cells,
 		'positions': positions,
-		'statuses': 'statuses',
+		'statuses': statuses,
 	}
-	
+
 	return render(request, 'index.html', context) 
+
+
 
 @csrf_exempt
 def output(request):
 
-	college = request.POST.get('college', False)
-	alt = request.POST.get('alt', False)
-	sec = request.POST.get('sec', False)
-	pick = request.POST.get('pick', False)
-	pos = request.POST.get('pos', False)
-	status = request.POST.get('status', False)
+	college = int(request.POST['college'])
+	alt = int(request.POST['alt'])
+	sec = int(request.POST['sec'])
+	pick = int(request.POST['pick'])
+	pos = int(request.POST['pos'])
+	status = int(request.POST['status'])
 
 	m = AcefsModel(college=college, alt=alt, secondary=sec, expected_pick=pick, position=pos, status=status)
 
@@ -160,20 +157,28 @@ def output(request):
 	salt = request.COOKIES.get('salt', '')
 	hash = request.COOKIES.get('hash', '')
 
+	context = {
+		'salt': salt,
+		'hash': hash,
+	}
+
 #	if 'salt' in request.COOKIES:
 
 #		if (hash != _hash_helper(salt)):
-#			return render(request, 'auth_error.html', {'salt': salt, 'hash': hash}) 
+#			return render(request, 'auth_error.html', context) 
+
 #	else:
-#		return render(request, 'auth_error.html', {'salt': salt, 'hash': hash}) 
+
+#		return render(request, 'auth_error.html', context) 
+
 
 	if visitor:
 		scenario.anonymous = False
 		scenario.save()
 
-	table = []
+	acefstable = []
 	for y in range(0, TOTAL_YEARS):
-		table.append({
+		acefstable.append({
 			'year': y + datetime.datetime.now().year,
 			'pr_minors': m.pr_minors[y],
 			'pr_out': m.pr_out[y]
@@ -197,18 +202,16 @@ def output(request):
 	years = [this_year + 2 * y + 1 for y in range(0, TOTAL_YEARS//2)]
 
 	context = {
-		'model': m,
-		'table': table,
+		'itemmodel': m,
+		'acefstable': acefstable,
 		'graph': graph,
 		'years': years,
 	}
 	return render(request, 'output.html', context) 
 
-
 @staff_member_required
 def visitors(request):
-	context = {
-	}
+	context = {}
 	return render(request, 'visitors.html', context) 
 
 @staff_member_required
@@ -216,18 +219,18 @@ def visitor_list(request, page_num=1):
 
 	# Annotate using number of scenarios and filter to show only > 0
 	visitors = Visitor.objects.annotate(num_scenarios=Count('scenario'))
-	visitors = visitors.filter(num_scenarios__gt=0).order_by('id')
-
-	if 'term' in request.GET:
+	visitors = visitors.filter(num_scenarios__gt=0)
+	
+	if request.GET.has_key('term'):
 		term = request.GET['term']
 		visitors = visitors.filter(fullname__icontains=term)
-	
+
 	else:
 		term = ''
 		visitors = visitors.all()
 
 	paginator = Paginator(visitors, 20)
-	page = paginator.get_page(page_num)
+	page = paginator.page(int(page_num))
 
 	context = {
 		'term': term,

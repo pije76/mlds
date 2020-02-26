@@ -6,7 +6,7 @@
     <p class="tip" title="{% flatblock 'output.bonus_threshold.help' 3600 %}">
         {% flatblock 'output.bonus_threshold.label' 3600 %}
     </p>
-    <p class="big_num tip" title="{% flatblock 'output.bonus_threshold.help' 3600 %}">{{ model.bonus_threshold|currency }}</p>
+    <p class="big_num tip" title="{% flatblock 'output.bonus_threshold.help' 3600 %}">{{ itemmodel.bonus_threshold|currency }}</p>
 
 </div>
 
@@ -15,7 +15,7 @@
     <p class="tip" title="{% flatblock 'output.max_slotted_bonus.help' 3600 %}">
         {% flatblock 'output.max_slotted_bonus.label' 3600 %}
     </p>
-    <p class="big_num tip" title="{% flatblock 'output.max_slotted_bonus.help' 3600 %}">{{ model.max_slotted_bonus|currency }}</p>
+    <p class="big_num tip" title="{% flatblock 'output.max_slotted_bonus.help' 3600 %}">{{ itemmodel.max_slotted_bonus|currency }}</p>
 
 </div>
 
@@ -24,7 +24,7 @@
     <p>
         {% flatblock 'output.best_path.label' 3600 %}
     </p>
-    {% if model.play_ball %}
+    {% if itemmodel.play_ball %}
         <p class="big_num green">{% flatblock 'output.best_path.baseball' 3600 %}</p>
     {% else %}
         <p class="big_num red">{% flatblock 'output.best_path.alternate' 3600 %}</p>
@@ -35,9 +35,9 @@
 
 <div class="inner_column career" style="width: 240px;">
 
-    <p class="tip" title="{% flatblock 'output.mlb_avg.help' 3600 %}">{% flatblock 'output.mlb_avg.label' 3600 %} <b>{{  model.MLBAverage }}</b></p>
-    <p class="tip" title="{% flatblock 'output.milb_avg.help' 3600 %}">{% flatblock 'output.milb_avg.label' 3600 %} <b>{{  model.MiLBAverage }}</b></p>
-    <p class="tip" title="{% flatblock 'output.pr_mlb.help' 3600 %}">{% flatblock 'output.pr_mlb.label' 3600 %} <b>{{  model.pr_mlb|percentage }}</b></p>
+    <p class="tip" title="{% flatblock 'output.mlb_avg.help' 3600 %}">{% flatblock 'output.mlb_avg.label' 3600 %} <b>{{  itemmodel.MLBAverage }}</b></p>
+    <p class="tip" title="{% flatblock 'output.milb_avg.help' 3600 %}">{% flatblock 'output.milb_avg.label' 3600 %} <b>{{  itemmodel.MiLBAverage }}</b></p>
+    <p class="tip" title="{% flatblock 'output.pr_mlb.help' 3600 %}">{% flatblock 'output.pr_mlb.label' 3600 %} <b>{{  itemmodel.pr_mlb|percentage }}</b></p>
 
 </div>
 
@@ -55,13 +55,13 @@
     <table>
         <thead>
             <tr>
-                <th>{% flatblock 'output.table.year.label' 3600%}</th>
-                <th class="tip" title="{% flatblock 'output.table.pr_minors.help' 3600 %}">{% flatblock 'output.table.pr_minors.label' 3600 %}</th>
-                <th class="tip" title="{% flatblock 'output.table.pr_out.help' 3600 %}">{% flatblock 'output.table.pr_out.label' 3600 %}</th>
+                <th>{% flatblock 'output.acefstable.year.label' 3600%}</th>
+                <th class="tip" title="{% flatblock 'output.acefstable.pr_minors.help' 3600 %}">{% flatblock 'output.acefstable.pr_minors.label' 3600 %}</th>
+                <th class="tip" title="{% flatblock 'output.acefstable.pr_out.help' 3600 %}">{% flatblock 'output.acefstable.pr_out.label' 3600 %}</th>
             </tr>
         </thead>
         <tbody>
-            {% for row in table %}
+            {% for row in acefstable %}
             <tr class="{% if forloop.counter|divisibleby:2 %}even{% else %}odd{% endif %}">
                 <td>{{ row.year }}</td>
                 <td>{{ row.pr_minors|percentage }}</td>

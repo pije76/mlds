@@ -59,8 +59,8 @@
 
     <div class="select_container">
         <select id="status_select" name="status">
-            {% for s in statuses %}
-            <option value="{{ s.index }}">{{ s.text }}</option>
+            {% for item in statuses %}
+            <option value="{{ item.index }}">{{ item.text }}</option>
             {% endfor %}
         </select>
     </div>

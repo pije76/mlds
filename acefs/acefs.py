@@ -1,16 +1,12 @@
-from .models import *
-from .filters import *
-
-from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
 from scipy.stats import norm    # Using numpy 1.6.0 and scipy 0.9.0
 
+import datetime
 import math
 import numpy
-import statistics 
-import datetime
-import django_filters
+
+from .models import *
 
 # This module provides the Python implementation of the Actuarial model.
 
@@ -27,6 +23,33 @@ MIN_MLB_START = 5           # C19
 ASSUME_100 = 3              # C20 - Assume 100% Chance in baseball first this many years
 
 TOTAL_YEARS = 20
+
+MLB_AVERAGE = (4.12,) * 12  # Rounds 1-3, Cells 1-12
+MLB_AVERAGE += (3.745,) * 3  # Rounds 4-6, Cells 13-15
+MLB_AVERAGE += (3.45,) * 4  # Rounds 7-10, Cells 16-19
+MLB_AVERAGE += (3.42,) * 2  # Rounds 11-20, Cells 20-21
+MLB_AVERAGE += (3.71,) * 2  # Rounds 21-30, Cells 22-23
+MLB_AVERAGE += (4.52,) * 3  # Rounds 30+, Cells 24-26
+
+MiLB_AVERAGE = (4,) * 12  # Rounds 1-3, Cells 1-12
+MiLB_AVERAGE += (5,) * 14  # Rounds 1-3, Cells 1-12
+
+R2_POSITION = [0.5225, 0.1909, 0.5877, 0.4806, 0.6212, 0.863, 0.9007, 0.7654, 0]
+
+R2_STATUS = [0.667, 0.8304, 0.7963]
+
+STATUS_CHOICES = (
+	(0, 'HS'),
+	(1, 'JC'),
+	(2, '4YR')
+)
+
+TRAVEL_TIME = (
+	5.2,  # HS
+	4.9,  # JC
+	4.07  # 4YR
+)   # In the spreadsheet, this is derived from a table listing college years
+	# separately. Simplified here.
 
 def norminv(x, mu, sigma):
 	"""
@@ -83,7 +106,6 @@ def smoothedMLBData(status, position, year, draft_cell):
 	except:
 		return None
 
-
 def max_bonus(draft_cell):
 	"""
 	Returns the maximum bonus for any pick in a given draft cell.
@@ -105,8 +127,8 @@ class DraftCell(object):
 
 	"""
 
-	def __init__(self, cell):
-		self.index = 0 # index is Zero-based
+	def __init__(self, index):
+		self.index = index # index is Zero-based
 
 	@property
 	def cell(self):
@@ -131,6 +153,7 @@ class DraftCell(object):
 
 		"""
 		return MLB_AVERAGE[self.index]
+		print('test:', MLB_AVERAGE[self.index])
 
 	@property
 	def lower(self):
@@ -181,7 +204,7 @@ class Status(object):
 	"""
 
 	def __init__(self, index):
-		self.index = 0
+		self.index = index
 
 	@property
 	def text(self):
@@ -211,7 +234,7 @@ class Position(object):
 	"""
 
 	def __init__(self, index):
-		self.index = 0
+		self.index = index
 
 	@property
 	def text(self):
@@ -237,21 +260,6 @@ class AcefsModel(object):
 	and getter methods .
 	"""
 
-	def __init__(self, college=None, alt=None, secondary=None, risk_tolerance=0.0, expected_pick=1, position=8, status=0):
-
-		self.college = college
-		self.alt = alt
-		self.secondary = secondary
-		self.risk_tolerance = risk_tolerance
-		self.expected_pick = expected_pick
-		self.position = position
-		self.status = status
-
-		self._needs_recalc = True
-
-		self.recalc()
-
-
 	@Property
 	def college():
 		"""
@@ -260,9 +268,8 @@ class AcefsModel(object):
 		"""
 		def fget(self):
 			return self._college
-
 		def fset(self, college_id):
-			self._college = College.objects.filter(pk=college_id)
+			self._college = College.objects.get(pk=college_id)
 			self._needs_recalc = True
 		return locals()
 
@@ -274,9 +281,8 @@ class AcefsModel(object):
 		"""
 		def fget(self):
 			return self._alt
-
 		def fset(self, alt_id):
-			self._alt = DOLSalary.objects.filter().values_list('id', flat=True)[0]
+			self._alt = DOLSalary.objects.get(pk=alt_id)
 			self._needs_recalc = True
 		return locals()
 
@@ -289,7 +295,7 @@ class AcefsModel(object):
 		def fget(self):
 			return self._secondary
 		def fset(self, secondary_id):
-			self._secondary = DOLSalary.objects.filter().values_list('id', flat=True)[0]
+			self._secondary = DOLSalary.objects.get(pk=secondary_id)
 			self._needs_recalc = True
 		return locals()
 
@@ -314,7 +320,6 @@ class AcefsModel(object):
 		"""
 		def fget(self):
 			return self._expected_pick
-
 		def fset(self, expected_pick):
 			self._expected_pick = DraftCell(expected_pick)
 			self._needs_recalc = True
@@ -348,6 +353,20 @@ class AcefsModel(object):
 			self._needs_recalc = True
 		return locals()
 
+	def __init__(self, college=None, alt=None, secondary=None, risk_tolerance=0.0, expected_pick=1, position=8, status=0):
+
+		self.college = college
+		self.alt = alt
+		self.secondary = secondary
+		self.risk_tolerance = risk_tolerance
+		self.expected_pick = expected_pick
+		self.position = position
+		self.status = status
+
+		self._needs_recalc = True
+
+		self.recalc()
+
 	def recalc(self):
 		"""
 		Called automatically on-demand when data has changed. Recalculates model.
@@ -360,7 +379,6 @@ class AcefsModel(object):
 		self._needs_recalc = False
 
 		# C26 - Maximum Slotted Bonus
-#		self._max_slotted_bonus = SigningBonus.objects.get(draft_cell=self.expected_pick.cell, status=self.status.index).amount
 		self._max_slotted_bonus = SigningBonus.objects.filter(draft_cell=self.expected_pick.cell, status=self.status.index).values_list('amount', flat=True).first()
 
 		# C40 Pr(MLB)
@@ -369,10 +387,7 @@ class AcefsModel(object):
 
 		self._pr_mlb = (0.2 * pr_all + 0.8 * pr_pos) / 100.0
 
-		startfx = College.objects.filter().values_list('start_fx', flat=True).first()
-		midfx = College.objects.filter().values_list('mid_fx', flat=True).first()
-
-		self._career_adj_factor = (0.2 * startfx + 0.8 * midfx) / 100.0
+		self._career_adj_factor = (0.2 * self.college.start_fx + 0.8 * self.college.mid_fx) / 100.0
 
 		# Column F
 		self._all_positions = []
@@ -394,15 +409,6 @@ class AcefsModel(object):
 		self._mlb_sal_shift = []
 		for year in range(0,TOTAL_YEARS):
 			if year == 0:
-				#sum_all = 0
-				#for i in range(1,int(self.status.travel_time)):
-				#    sum_all += self._all_positions[i]
-
-				#sum_sel = 0
-				#for i in range(1,int(self.status.travel_time)):
-				#    sum_sel += self._selected_position[i]
-
-				#self._mlb_sal_shift.append( 0.6 * sum_all + 0.4 * sum_sel )
 				self._mlb_sal_shift.append( 0 )
 				
 			else:
@@ -438,41 +444,14 @@ class AcefsModel(object):
 				n7 = R2_POSITION[self.position.index]
 				o7 = R2_STATUS[self.status.index]
 
-#				positiondata = ['1','2','3','4','5','6','7','8']
-#				NX = [Q(position=option) for option in positiondata]   
-#				queryposition = NX.pop()
-#				for p in NX:
-#					queryposition |= p
-
-#				statusdata = ['0','1','2']
-#				OX = [Q(status=option) for option in statusdata]   
-#				querystatus = OX.pop()
-#				for q in OX:
-#					querystatus |= q
-
 				if self.position.text == 'ALL':
 					NX = 0
 				else:
-#					NX = PrOutPosition.objects.filter(queryposition)
-					NX = PrOutPosition.objects.get().value
-#					NX = list(NX)
-#					NX = PrOutPosition.objects.get(position=self.position.index, year=year).value
-#					NX = PrOutPosition.objects.filter(position=positiondata).filter(year=year).values_list('value', flat=True).first()
-#					NX = PrOutPosition.objects.filter(position=self.position.index, year=year).values_list('value', flat=True).first()
+					NX = PrOutPosition.objects.filter(position=self.position.index).values_list('value', flat=True).first()
 
-#				OX = PrOutStatus.objects.filter(status=self.status.index, year=year).values_list('value', flat=True).first()
-#				OX = PrOutStatus.objects.filter(status=statusdata).filter(year=year).values_list('value', flat=True).first()
-#				OX = PrOutStatus.objects.filter(querystatus)
-				OX = PrOutStatus.objects.get().value
-##				OX = list(OX)
-
-#				nxdata = PrOutPosition.objects.values_list('position', 'year', named=True).first()
-#				nxdata = list(nxdata)
-#				oxdata = PrOutStatus.objects.values_list('status', 'year', named=True).first()
-#				oxdata = list(oxdata)
+				OX = PrOutStatus.objects.filter(status=self.status.index).values_list('value', flat=True).first()
 
 				inv_pr_out = (NX * n7 + OX * o7) / (n7 + o7)
-#				inv_pr_out = (nxdata * n7 + oxdata * o7) / (n7 + o7)
 
 			self._pr_out.append(1.0 - inv_pr_out)
 
@@ -483,16 +462,8 @@ class AcefsModel(object):
 
 
 		# Columns M-AG (AltStart20__)
-		sal100 = DOLSalary.objects.filter().values_list('sal10', flat=True)[0]
-		sal250 = DOLSalary.objects.filter().values_list('sal25', flat=True)[0]
-		sal500 = DOLSalary.objects.filter().values_list('sal50', flat=True)[0]
-		sal750 = DOLSalary.objects.filter().values_list('sal75', flat=True)[0]
-		sal900 = DOLSalary.objects.filter().values_list('sal90', flat=True)[0]
-		data0 = sal100 + sal250 + sal500 + sal750 + sal900
-
-#		mu = self.alt.mean(data)
-		mu = numpy.mean(data0)
-		sigma = numpy.std(data0)
+		mu = self.alt.mean()
+		sigma = self.alt.deviation()
 		self._alt_start = [] # Outer index is year
 		for year in range(0,TOTAL_YEARS):
 			row = [] # Inner index is alt_year
@@ -516,16 +487,10 @@ class AcefsModel(object):
 
 			self._alt_start.append(row)
 
-		sal101 = DOLSalary.objects.filter().values_list('sal10', flat=True)[0]
-		sal251 = DOLSalary.objects.filter().values_list('sal25', flat=True)[0]
-		sal501 = DOLSalary.objects.filter().values_list('sal50', flat=True)[0]
-		sal751 = DOLSalary.objects.filter().values_list('sal75', flat=True)[0]
-		sal901 = DOLSalary.objects.filter().values_list('sal90', flat=True)[0]
-		data1 = sal101 + sal251 + sal501 + sal751 + sal901
 
 		# Columns AH-BA (SecStart20__)
-		mu = numpy.mean(data1)
-		sigma = numpy.std(data1)
+		mu = self.secondary.mean()
+		sigma = self.secondary.deviation()
 		self._sec_start = [] # Outer index is year
 		for year in range(0,TOTAL_YEARS):
 			row = [] # Inner index is sec_year
@@ -628,6 +593,7 @@ class AcefsModel(object):
 
 		"""
 		return self.expected_pick.MLBAverage
+		print('test2:', self.expected_pick.MLBAverage)
 
 	@property
 	def MiLBAverage(self):                              # C39
@@ -828,3 +794,4 @@ class AcefsModel(object):
 		if self._needs_recalc:
 			self.recalc()
 		return self._max_slotted_bonus
+
